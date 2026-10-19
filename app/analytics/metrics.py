@@ -4,7 +4,7 @@ import math
 import pandas as pd
 from app.config import scoring_config
 
-HORIZONS = {"1h": 1, "6h": 6, "24h": 24, "72h": 72, "7d": 168}
+HORIZONS = {"1h": 1, "6h": 6, "24h": 24, "72h": 72, "7d": 168, "30d": 720}
 
 
 def nearest_snapshot(history, current_time, hours, tolerance_minutes=90):
@@ -37,13 +37,17 @@ def window_stats(history, now, hours):
     return float(values.playing.mean()), int(values.playing.max())
 
 
-def threshold_crossings(snapshots, thresholds=(1000, 5000, 10000, 50000)):
+def threshold_crossings(snapshots, thresholds=(100, 500, 1000, 5000, 10000, 50000)):
     events = []
     if snapshots.empty:
         return pd.DataFrame(columns=["universe_id", "threshold", "timestamp", "playing", "kind"])
     for uid, history in snapshots.groupby("universe_id"):
         history = history.sort_values("timestamp")
         for threshold in thresholds:
+            if history.iloc[0].playing >= threshold:
+                first = history.iloc[0]
+                events.append({"universe_id":uid,"threshold":threshold,"timestamp":first.timestamp,"playing":first.playing,"kind":"already above at first observation"})
+                continue
             for i in range(1, len(history)):
                 previous, current = history.iloc[i - 1], history.iloc[i]
                 if previous.playing < threshold <= current.playing:
@@ -86,6 +90,11 @@ def breakout_score(row, config=None):
     }
     weights = config["weights"]
     score = sum(weights.get(k, 0) * v for k, v in components.items()) / sum(weights.values()) * 100
+    # Tiny starting CCUs create spectacular but fragile percentages. Keep those
+    # observed percentages visible while reducing their influence on the heuristic.
+    if valid(row.get("baseline_ccu_6h")):
+        score *= min(1.0, max(0.0, row["baseline_ccu_6h"]) / config.get("baseline_saturation_ccu",100))
+    score *= min(1.0, row.get("coverage_6h",1.0))
     g1 = pct("pct_1h")
     observed_peak = row.get("recent_observed_peak", row.get("peak_24h"))
     if g1 is not None and g1 < -20 and valid(observed_peak) and observed_peak > 0 and row["ccu"] < observed_peak * 0.7:
@@ -109,11 +118,20 @@ def game_metrics(game, history, appearances, now):
         previous = nearest_snapshot(history, asof, hours)
         row[f"delta_{label}"], row[f"pct_{label}"] = growth(current.playing, None if previous is None else previous.playing)
         row[f"baseline_{label}"] = None if previous is None else previous.timestamp
+        row[f"baseline_ccu_{label}"] = None if previous is None else previous.playing
+        if previous is not None:
+            actual_hours=(asof-previous.timestamp).total_seconds()/3600
+            visit_delta=growth(current.visits,previous.visits)[0]
+            row[f"visit_velocity_{label}"]=visit_delta/actual_hours if visit_delta is not None and visit_delta>=0 and actual_hours>0 else None
+            row[f"baseline_elapsed_hours_{label}"]=actual_hours
+        else:
+            row[f"visit_velocity_{label}"]=None
+            row[f"baseline_elapsed_hours_{label}"]=None
         if label in ("1h", "24h"):
             # Rank improvement uses the same list on both ends; missing is not rank zero.
             a, b = current.trending_rank, None if previous is None else previous.trending_rank
             row[f"rank_change_{label}"] = b - a if pd.notna(a) and pd.notna(b) else None
-        if label in ("24h", "72h", "7d"):
+        if label in ("24h", "72h", "7d", "30d"):
             row[f"avg_{label}"], row[f"peak_{label}"] = window_stats(history, asof, hours)
             for metric in ("visits", "favorites"):
                 row[f"{metric}_growth_{label}"] = growth(current[metric], None if previous is None else previous[metric])[0]
@@ -125,6 +143,16 @@ def game_metrics(game, history, appearances, now):
     # Ignore repeated forced/manual observations within minutes as sustained hourly growth.
     gaps = recent.timestamp.diff().dt.total_seconds().iloc[1:]
     row["positive_steps"] = int(((changes > 0) & (gaps >= 1800) & (gaps <= 5400)).sum())
+    row["coverage_6h"]=min(1.0,recent.timestamp.dt.floor("h").nunique()/7)
+    peak=float(history.playing.max())
+    row["observed_peak_ccu"]=peak
+    row["drawdown_pct"]=(row["ccu"]/peak-1)*100 if peak>0 else 0.0
+    row["hours_since_observed_peak"]=(asof-history.loc[history.playing==peak,"timestamp"].max()).total_seconds()/3600
+    recent24=history[history.timestamp>=asof-pd.Timedelta(hours=24)]
+    gaps24=recent24.timestamp.diff().dt.total_seconds().dropna()
+    row["coverage_24h"]=min(1.0,recent24.timestamp.dt.floor("h").nunique()/25)
+    enough=row["history_hours"]>=24 and row["coverage_24h"]>=0.75 and not gaps24.empty and gaps24.max()<=5400
+    row["sustained_growth_24h"]=bool(row.get("pct_24h",0)>0 and (recent24.playing.diff().dropna()>0).mean()>=0.6) if enough and row.get("pct_24h") is not None else None
     row["recent_observed_peak"] = int(history[history.timestamp >= asof - pd.Timedelta(hours=24)].playing.max())
     row["breakout_score"] = breakout_score(row)
     return row

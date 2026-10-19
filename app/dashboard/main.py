@@ -7,6 +7,7 @@ import plotly.express as px
 import streamlit as st
 from app.analytics.queries import load_data, build_market, entrants, comparison_market
 from app.database.session import utcnow
+from app.dashboard.research import cohort_page,opportunities_page,coverage_page
 
 st.set_page_config(page_title="Roblox / Market Intelligence", page_icon="↗", layout="wide")
 st.markdown("""<style>
@@ -27,7 +28,7 @@ def table(frame, columns=None, key=None, select=False):
     if frame.empty:
         st.info("No matching observations yet. Historical signals need more collection cycles.")
         return None
-    columns = columns or ["name", "ccu", "pct_1h", "pct_24h", "pct_72h", "pct_7d", "breakout_score", "age_days", "trending_rank", "stale"]
+    columns = columns or ["name", "ccu", "pct_1h", "pct_24h", "pct_72h", "pct_7d", "pct_30d", "breakout_score", "age_days", "trending_rank", "stale"]
     sort_column = st.session_state.get("ranking_sort", "View default")
     if sort_column in frame.columns:
         frame = frame.sort_values(sort_column, ascending=st.session_state.get("ranking_ascending", False), na_position="last")
@@ -78,14 +79,15 @@ def explorer(games, snapshots, appearances, market):
     with right:
         st.plotly_chart(px.line(history, x="timestamp", y="favorites", title="Favorites", markers=len(history) < 5), width="stretch")
     st.subheader("Growth and observation quality")
-    table(market[market.universe_id == uid], ["name", "pct_1h", "pct_6h", "pct_24h", "pct_72h", "pct_7d", "avg_24h", "avg_72h", "avg_7d", "peak_24h", "peak_7d", "rank_change_1h", "rank_change_24h", "best_discovery_rank", "appearance_count", "update_age_days"], key="detail_metrics")
+    table(market[market.universe_id == uid], ["name", "pct_1h", "pct_6h", "pct_24h", "pct_72h", "pct_7d", "pct_30d", "visit_velocity_1h", "visit_velocity_24h", "drawdown_pct", "sustained_growth_24h", "coverage_24h", "avg_24h", "avg_72h", "avg_7d", "avg_30d", "peak_24h", "peak_7d", "rank_change_1h", "rank_change_24h", "best_discovery_rank", "appearance_count", "update_age_days"], key="detail_metrics")
     title_changes = history.loc[history.game_name_at_time.ne(history.game_name_at_time.shift()), ["timestamp", "game_name_at_time"]]
     st.subheader("Observed title history")
     st.dataframe(title_changes, hide_index=True, width="stretch")
     with st.expander("Metadata / classification foundation"):
         st.write(game.description or "No description exposed.")
         st.json({k: None if pd.isna(game[k]) else game[k] for k in ["primary_genre", "secondary_genre", "core_loop", "theme", "trend_family", "social_mechanic", "monetization_style"]})
-        st.caption("No inferred classifications. Roblox's raw genre fields remain in metadata_json.")
+        st.write("Classification source:",game.classification_source,"Confidence:",game.classification_confidence)
+        st.caption("Official genres are Roblox taxonomy. Manual tags require source/confidence labels; hypotheses are unverified.")
 
 
 def main():
@@ -115,7 +117,7 @@ def main():
         min_age = st.number_input("Minimum game age / days", min_value=0, value=0)
         score = st.slider("Minimum Breakout Score", 0, 100, 0)
         apply_growth = st.checkbox("Require minimum growth")
-        horizon = st.selectbox("Growth horizon", ["24h", "72h", "7d", "6h", "1h"])
+        horizon = st.selectbox("Growth horizon", ["24h", "72h", "7d", "30d", "6h", "1h"])
         min_growth = st.number_input("Minimum growth %", value=0.0)
         source_options = sorted(appearances.source.unique().tolist())
         sources = st.multiselect("Discovery source (latest snapshot)", source_options)
@@ -140,7 +142,7 @@ def main():
         filtered = filtered[filtered.source.map(lambda s: bool(set(s.split(",")) & set(sources)))]
     if not include_stale:
         filtered = filtered[~filtered.stale]
-    tabs = st.tabs(["BREAKOUTS", "TOP PLAYING", "NEW ENTRANTS", "SUSTAINED WINNERS", "DECLINING", "GAME EXPLORER", "MARKET OVERVIEW"])
+    tabs = st.tabs(["BREAKOUTS", "TOP PLAYING", "NEW ENTRANTS", "SUSTAINED WINNERS", "DECLINING", "GAME EXPLORER", "MARKET OVERVIEW", "COHORTS", "MARKET OPPORTUNITIES", "DISCOVERY & CLASSIFICATION"])
     with tabs[0]:
         st.subheader("What is accelerating right now?")
         scored = filtered[filtered.breakout_score.notna()].sort_values("breakout_score", ascending=False)
@@ -173,8 +175,8 @@ def main():
         table(winners.sort_values("breakout_score", ascending=False), key="winners")
     with tabs[4]:
         st.subheader("Losing players and share in a comparable cohort")
-        hours = st.selectbox("Decline horizon", [24, 72, 168])
-        label = {24: "24h", 72: "72h", 168: "7d"}[hours]
+        hours = st.selectbox("Decline horizon", [24, 72, 168, 720])
+        label = {24: "24h", 72: "72h", 168: "7d", 720:"30d"}[hours]
         matched = comparison_market(market, snapshots, hours)
         if matched.empty:
             st.info("Insufficient history for matched-cohort player share comparisons.")
@@ -193,8 +195,8 @@ def main():
         cols[1].metric("Tracked games", len(games))
         cols[2].metric("Discovered today", int((games.first_seen_at >= today).sum()))
         cols[3].metric("First observed in Trending today", int((first_trending >= today).sum()))
-        hours = st.selectbox("Market comparison", [24, 72, 168], format_func=lambda h: {24: "24h", 72: "3d", 168: "7d"}[h])
-        label = {24: "24h", 72: "72h", 168: "7d"}[hours]
+        hours = st.selectbox("Market comparison", [24, 72, 168, 720], format_func=lambda h: {24: "24h", 72: "3d", 168: "7d", 720:"30d"}[h])
+        label = {24: "24h", 72: "72h", 168: "7d", 720:"30d"}[hours]
         matched = comparison_market(market, snapshots, hours)
         if matched.empty:
             st.info("Insufficient history for this market comparison.")
@@ -212,6 +214,9 @@ def main():
         with st.expander("Collection health / recent runs"):
             st.dataframe(runs, hide_index=True, width="stretch")
         st.caption("Discovery lists are a sampled, potentially regional/device-specific view. No whole-platform market-share claims or inferred genre trends.")
+    with tabs[7]: cohort_page(games,snapshots,market)
+    with tabs[8]: opportunities_page(games,market)
+    with tabs[9]: coverage_page(games)
 
 
 main()

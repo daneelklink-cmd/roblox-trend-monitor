@@ -22,7 +22,7 @@ load_env()
 class Settings:
     database: Path = field(default_factory=lambda: ROOT / os.getenv("RTM_DATABASE", "data/market.sqlite"))
     target_games: int = field(default_factory=lambda: max(1, int(os.getenv("RTM_TARGET_GAMES", "400"))))
-    interval: float = field(default_factory=lambda: max(0.1, float(os.getenv("RTM_REQUEST_INTERVAL", "0.6"))))
+    interval: float = field(default_factory=lambda: max(0.1, float(os.getenv("RTM_REQUEST_INTERVAL", "1.5"))))
     discovery_pages: int = field(default_factory=lambda: max(1, int(os.getenv("RTM_DISCOVERY_PAGES", "6"))))
     country: str = field(default_factory=lambda: os.getenv("RTM_DISCOVERY_COUNTRY", "all"))
     device: str = field(default_factory=lambda: os.getenv("RTM_DISCOVERY_DEVICE", "computer"))
@@ -31,3 +31,7 @@ class Settings:
 
 def scoring_config():
     return json.loads((ROOT / "config/scoring.json").read_text(encoding="utf-8"))
+
+
+def discovery_config():
+    return json.loads((ROOT / "config/discovery.json").read_text(encoding="utf-8"))

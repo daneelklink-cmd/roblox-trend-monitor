@@ -46,8 +46,11 @@ class PublicClient:
         })
         self.interval, self.sleep, self.last = interval, sleep, 0.0
         self.failed_requests = 0
+        self.blocked_urls = set()
 
     def get(self, url, params=None):
+        if url in self.blocked_urls:
+            raise SourceError(f"{url}: deferred after rate limit; retry next collection cycle")
         for attempt in range(4):
             self.sleep(max(0, self.interval - (time.monotonic() - self.last)))
             self.last = time.monotonic()
@@ -64,8 +67,12 @@ class PublicClient:
                 log.warning("Request failed attempt=%s url=%s error=%s", attempt + 1, url, exc)
                 retryable = response is None or response.status_code == 429 or response.status_code >= 500
                 if not retryable or attempt == 3:
+                    if response is not None and response.status_code==429:
+                        self.blocked_urls.add(url)
                     raise SourceError(f"{url}: {exc}") from exc
                 delay = 2 ** attempt + random.uniform(0, 0.3)
+                if response is not None and response.status_code==429 and not response.headers.get("Retry-After"):
+                    delay=max(delay,30)
                 if response is not None and response.headers.get("Retry-After"):
                     value = response.headers["Retry-After"]
                     try:
@@ -77,6 +84,7 @@ class PublicClient:
                             log.warning("Invalid Retry-After header: %s", value)
                 # Do not retry early if a server asks for a long pause; defer to the next cycle.
                 if delay > 120:
+                    self.blocked_urls.add(url)
                     raise SourceError(f"{url}: server requested {delay:.0f}s cooldown; deferred") from exc
                 self.sleep(delay)
 

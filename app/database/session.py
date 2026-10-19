@@ -28,4 +28,6 @@ def database(settings=None):
         connection.execute("PRAGMA busy_timeout=30000")
 
     Base.metadata.create_all(engine)
+    from app.database.migrations import migrate
+    migrate(engine)
     return engine, sessionmaker(engine, expire_on_commit=False)

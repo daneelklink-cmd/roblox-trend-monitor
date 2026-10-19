@@ -3,6 +3,45 @@ import pandas as pd
 from app.config import ROOT
 from app.database.session import utcnow
 from app.analytics.queries import load_data, build_market, entrants
+from app.analytics.opportunities import enrich_market, niche_metrics
+
+
+def research_sections(market, games, hours, label, now):
+    lines = ["", "## RESEARCH OBSERVATIONS", "", "Creation is not verified public launch. All rankings below describe our selected tracked sample."]
+    if market.empty:
+        return lines + ["No observations; research hypotheses require collected evidence."]
+    enriched = enrich_market(market, games)
+    fresh = enriched[~enriched.stale]
+    for title, subset in (("Five emerging smaller/newer games", fresh[(fresh.ccu < 1000) | (fresh.age_days <= 90)]),
+                          ("Five fastest-growing recently created games", fresh[fresh.age_days <= 90])):
+        lines += ["", f"### {title}", ""]
+        ranked = subset[subset[f"pct_{label}"].notna() & (subset[f"pct_{label}"] > 0)].nlargest(5, f"delta_{label}")
+        if ranked.empty:
+            lines.append("Insufficient history or no qualifying positive growth; no winners inferred.")
+        for _, row in ranked.iterrows():
+            lines.append(f"- Universe {int(row.universe_id)}: {fmt(row.ccu)} CCU, {fmt(row[f'pct_{label}'], True)} / {label}, +{fmt(row[f'delta_{label}'])} CCU; creation age {fmt(row.age_days)} days.")
+    lines += ["", "### Categories, declining trends and concentration", ""]
+    niches = niche_metrics(enriched, "primary_genre", label, now)
+    if niches.empty:
+        lines.append("No inferred genre/mechanic/trend claims: classification fields are unpopulated.")
+    else:
+        for _, row in niches.iterrows():
+            lines.append(f"- {row.niche}: {row.tracked_games} tracked, {row.matched_games} comparable ({row.history_coverage_pct:.0f}% coverage), {row.aggregate_current_ccu:,} current CCU; matched growth {fmt(row.matched_aggregate_growth_pct, True)}; HHI {fmt(row.hhi)}, matched HHI change {fmt(row.matched_hhi_change)}. Supporting universe IDs: {row.dominant_game_ids}. Classification: {row.classification_sources}.")
+    newcomers = fresh[fresh.first_seen_at >= now - pd.Timedelta(hours=hours)].nlargest(5, "ccu")
+    lines += ["", "### Interesting newly observed competitors", "", "Newly observed does not mean newly launched."]
+    for _, row in newcomers.iterrows():
+        lines.append(f"- Universe {int(row.universe_id)}: {fmt(row.ccu)} CCU; creation age {fmt(row.age_days)} days; first tracked {row.first_seen_at} UTC.")
+    if newcomers.empty:
+        lines.append("No fresh newly observed competitors in this window.")
+    lines += ["", "### Three manual research hypotheses", ""]
+    candidates = fresh[(fresh.ccu < 1000) | (fresh.age_days <= 90)].nlargest(3, "ccu")
+    for index in range(3):
+        if index >= len(candidates):
+            lines.append(f"{index+1}. Missing evidence: not enough fresh smaller/newer candidates for another supported hypothesis.")
+        else:
+            row = candidates.iloc[index]
+            lines.append(f"{index+1}. Hypothesis for manual investigation: study Universe {int(row.universe_id)} ({fmt(row.ccu)} observed CCU, creation age {fmt(row.age_days)} days) to identify its core loop and acquisition source. Validate differentiation, retention and observed monetization before considering a prototype. Missing evidence: verified launch, retention, acquisition costs and profitability; current popularity alone does not establish an opportunity.")
+    return lines + ["", "Observed metrics are not modeled revenue. Discovery is relevance/ranking biased; missing history is never backfilled."]
 
 
 def fmt(value, percentage=False):
@@ -51,7 +90,7 @@ def generate_reports(settings=None, output=None):
             lines.append(f"- {int((first >= now - pd.Timedelta(hours=hours)).sum())} games first observed in Trending in this window (may reflect initial sampling).")
             sustained = fresh[(fresh.pct_24h > 20) & (fresh.pct_72h > 20) & (fresh.pct_7d > 0)]
             lines.append(f"- {len(sustained)} games have >20% 24h and 72h growth plus positive 7d growth. This does not imply every intervening day grew.")
-            lines += ["", "No inferred genre/mechanic/trend claims: classification fields are unpopulated."]
+        lines += research_sections(market, games, hours, label, now)
         path = output / folder / f"{now:%Y-%m-%d}.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -1,6 +1,8 @@
 import pandas as pd
 from sqlalchemy import select
 from app.database.models import Game, Snapshot, DiscoveryAppearance, CollectionRun
+from app.database.models import CollectionAttempt, SourceRun, DiscoveryCandidate, MissingObservation, WatchEntry
+from sqlalchemy import func
 from app.database.session import database, utcnow
 from app.analytics.metrics import game_metrics, threshold_crossings
 
@@ -47,7 +49,7 @@ def entrants(snapshots, games):
 
 def comparison_market(market, snapshots, hours, now=None):
     """Compare only a matched cohort; discovery expansion cannot masquerade as share loss."""
-    label = {24: "24h", 72: "72h", 168: "7d"}[hours]
+    label = {24: "24h", 72: "72h", 168: "7d", 720:"30d"}[hours]
     matched = market[(~market.stale) & market[f"delta_{label}"].notna()].copy()
     if matched.empty:
         return matched
@@ -56,3 +58,18 @@ def comparison_market(market, snapshots, hours, now=None):
     prior_total = prior.sum()
     matched["share_change_pp"] = (matched.ccu / current_total - prior / prior_total) * 100 if current_total > 0 and prior_total > 0 else None
     return matched
+
+
+def load_research_data(settings=None):
+    engine,Session=database(settings)
+    try:
+        with engine.connect() as c:
+            attempts=pd.read_sql(select(CollectionAttempt).order_by(CollectionAttempt.started_at.desc()).limit(50),c)
+            latest=attempts.iloc[0].id if len(attempts) else None
+            sources=pd.read_sql(select(SourceRun).where(SourceRun.attempt_id==latest),c)
+            missing=pd.read_sql(select(MissingObservation).order_by(MissingObservation.timestamp.desc()).limit(1000),c)
+            watch=pd.read_sql(select(WatchEntry),c)
+            candidates=pd.read_sql(select(DiscoveryCandidate).where(DiscoveryCandidate.attempt_id==latest),c)
+        return attempts,sources,missing,watch,candidates
+    finally:
+        engine.dispose()
