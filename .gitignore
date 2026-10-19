@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/*
+!data/.gitkeep
+reports/daily/
+reports/3day/
+reports/weekly/
+.env
+*.log

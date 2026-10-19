@@ -1,0 +1,17 @@
+{
+  "minimum_history_hours": 6,
+  "weights": {
+    "ccu": 4,
+    "growth_6h": 16,
+    "growth_24h": 22,
+    "growth_72h": 14,
+    "acceleration": 18,
+    "rank_improvement": 8,
+    "appearances": 4,
+    "age": 4,
+    "sustained": 10
+  },
+  "growth_saturation_percent": 200,
+  "acceleration_saturation_percent_per_hour": 10,
+  "collapse_penalty": 35
+}
