@@ -20,11 +20,10 @@ class SearchDiscovery:
         self.failed_sources = 0
 
     def queries(self):
-        core = self.config["core_queries"]
-        rotation = self.config["rotating_queries"]
-        count = max(0, self.config["queries_per_cycle"] - len(core))
+        rotation = list(dict.fromkeys(self.config["core_queries"] + self.config["rotating_queries"]))
+        count = min(max(0, self.config["queries_per_cycle"]), len(rotation))
         start = (int(self.now.timestamp() // 3600) * count) % max(1, len(rotation))
-        return list(dict.fromkeys(core + [rotation[(start+i) % len(rotation)] for i in range(min(count, len(rotation)))]))
+        return [rotation[(start+i) % len(rotation)] for i in range(count)]
 
     def discover(self):
         # Search has a tighter observed throttle than metadata. Keep its pacing
