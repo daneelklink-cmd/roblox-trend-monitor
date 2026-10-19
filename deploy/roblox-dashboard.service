@@ -1,0 +1,26 @@
+[Unit]
+Description=Roblox market intelligence dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=roblox-monitor
+Group=roblox-monitor
+WorkingDirectory=/opt/roblox-trend-monitor
+EnvironmentFile=/etc/roblox-trend-monitor.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=HOME=/var/lib/roblox-trend-monitor
+ExecStart=/opt/roblox-trend-monitor/.venv/bin/python -m streamlit run app/dashboard/main.py --server.address=127.0.0.1 --server.port=8501 --server.headless=true
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/roblox-trend-monitor /opt/roblox-trend-monitor/data /opt/roblox-trend-monitor/reports
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
