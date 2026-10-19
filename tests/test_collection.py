@@ -7,6 +7,10 @@ from app.services.collection import collect
 from app.database.session import database
 from app.database.models import Game, Snapshot, DiscoveryAppearance
 import pytest
+import io
+import urllib.error
+from unittest.mock import patch
+from app.collectors.http import UrllibTransport
 
 
 class FakeClient:
@@ -130,3 +134,22 @@ def test_discovery_survives_later_page_failure(settings):
     assert len(found) == 1 and found[0].universe_id == 1
     assert provider.failed_sources == 1
     client.close()
+
+
+def test_urllib_transport_preserves_http_errors():
+    error = urllib.error.HTTPError("https://games.roblox.com/test", 403, "Forbidden", {}, io.BytesIO(b"denied"))
+    with patch("urllib.request.urlopen", side_effect=error):
+        client = PublicClient(interval=0, transport=UrllibTransport(), sleep=lambda _: None)
+        with pytest.raises(SourceError, match="403"):
+            client.get("https://games.roblox.com/test")
+        assert client.failed_requests == 1
+        client.close()
+
+
+def test_urllib_transport_timeout_uses_normal_retries():
+    with patch("urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+        client = PublicClient(interval=0, transport=UrllibTransport(), sleep=lambda _: None)
+        with pytest.raises(SourceError):
+            client.get("https://games.roblox.com/test")
+        assert client.failed_requests == 4
+        client.close()

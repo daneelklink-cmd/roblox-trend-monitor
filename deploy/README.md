@@ -7,9 +7,11 @@ The dashboard and hourly collector run as separate systemd services under the un
 - Environment: `/etc/roblox-trend-monitor.env`
 - Reports: `/opt/roblox-trend-monitor/reports`
 - Collector log: `/opt/roblox-trend-monitor/data/collector.log`
-- Initial URL: `http://212.227.231.84`
+- URL: `https://0i9kpih.cserverhost.cloud`
 
-The initial IP endpoint exposes only the public-data dashboard. For a chosen domain, update `server_name`, point DNS to the VPS, and configure HTTPS at the reverse proxy. Authentication can then be added for private access.
+The endpoint exposes the public-data dashboard. Let's Encrypt HTTPS is installed through Certbot, with HTTP redirects and automatic renewal via `certbot.timer`. Check renewal with `certbot renew --dry-run`. Authentication can be added for private access.
+
+This VPS uses `RTM_HTTP_TRANSPORT=urllib`: its standard-library HTTPS transport is wrapped by httpx because native httpcore requests stalled on this host while urllib and curl succeeded. TLS verification, endpoint URLs, request headers, rate limits and HTTP error handling are unchanged. Local Windows collection keeps the default httpx transport.
 
 Source transfer uses `git archive`, excluding local databases, credentials, SSH keys and virtual environments. Existing SQLite history is transferred separately with SQLite's online backup API and only seeded if no server database exists.
 

@@ -1,6 +1,9 @@
 import logging
+import os
 import random
 import time
+import urllib.error
+import urllib.request
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 import httpx
@@ -12,8 +15,31 @@ class SourceError(RuntimeError):
     pass
 
 
+class UrllibTransport(httpx.BaseTransport):
+    """Optional standard-library transport for hosts where httpcore reads stall.
+
+    Keeps httpx response/error handling and identical API URLs, headers and TLS
+    validation. HTTP errors, including 401/403/429, are never hidden or bypassed.
+    """
+    def handle_request(self, request):
+        upstream = urllib.request.Request(str(request.url), headers=dict(request.headers), method=request.method)
+        try:
+            with urllib.request.urlopen(upstream, timeout=30) as response:
+                return httpx.Response(response.status, headers=dict(response.headers), content=response.read(), request=request)
+        except urllib.error.HTTPError as exc:
+            with exc:
+                return httpx.Response(exc.code, headers=dict(exc.headers), content=exc.read(), request=request)
+        except TimeoutError as exc:
+            raise httpx.ReadTimeout(str(exc), request=request) from exc
+        except urllib.error.URLError as exc:
+            raise httpx.ConnectError(str(exc), request=request) from exc
+
+
 class PublicClient:
     def __init__(self, interval=0.6, transport=None, sleep=time.sleep):
+        if transport is None and os.getenv("RTM_HTTP_TRANSPORT", "httpx") == "urllib":
+            transport = UrllibTransport()
+            log.info("Using standard-library HTTPS transport inside httpx")
         self.client = httpx.Client(timeout=30, transport=transport, headers={
             "User-Agent": "RobloxTrendMonitor/0.1 (local market research; public read-only APIs)",
             "Accept": "application/json",
