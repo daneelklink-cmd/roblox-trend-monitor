@@ -27,6 +27,22 @@ def test_search_pagination_and_sponsored_exclusion():
     assert 'relevance' in scout.coverage[0]['scope']
 
 
+def test_search_budget_rotation_and_interval_restoration(now):
+    class Client:
+        interval=6.5
+        def get(self,url,params):
+            assert self.interval==60
+            return {'searchResults':[]}
+    client=Client()
+    cfg={'core_queries':['alpha','beta'],'rotating_queries':['farming','survival'],
+         'queries_per_cycle':1,'search_pages':1,'search_interval_seconds':60}
+    first=SearchDiscovery(client,cfg,now)
+    second=SearchDiscovery(client,cfg,now+timedelta(hours=1))
+    assert len(first.queries())==1 and first.queries()!=second.queries()
+    first.discover()
+    assert client.interval==6.5
+
+
 def test_admission_prioritizes_young_small_watchlist(settings,now):
     entries=[Appearance(i,'source',i) for i in range(1,502)]
     rows={i:{'created':'2020-01-01T00:00:00Z','playing':10000} for i in range(1,502)}
