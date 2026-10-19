@@ -27,6 +27,18 @@ class SearchDiscovery:
         return list(dict.fromkeys(core + [rotation[(start+i) % len(rotation)] for i in range(min(count, len(rotation)))]))
 
     def discover(self):
+        # Search has a tighter observed throttle than metadata. Keep its pacing
+        # independent, and restore the normal metadata interval afterwards.
+        previous = getattr(self.client, "interval", None)
+        if previous is not None:
+            self.client.interval = max(previous, self.config.get("search_interval_seconds", 10))
+        try:
+            return self._discover()
+        finally:
+            if previous is not None:
+                self.client.interval = previous
+
+    def _discover(self):
         found = {}
         for query in self.queries():
             source = "search:" + query

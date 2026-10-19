@@ -1,6 +1,7 @@
 {
   "search_enabled": true,
-  "search_pages": 3,
+  "search_pages": 1,
+  "search_interval_seconds": 10,
   "queries_per_cycle": 12,
   "core_queries": ["alpha", "beta", "testing", "new"],
   "rotating_queries": ["new simulator", "new tycoon", "new survival", "new obby", "new tower defense", "new farming", "incremental", "idle", "co-op", "factory", "fishing", "horror", "roguelike", "garden", "automation", "island", "train", "restaurant", "mining", "dungeon", "rng", "crafting", "sandbox", "puzzle", "pvp", "tower defense", "survival", "tycoon", "simulator"],
