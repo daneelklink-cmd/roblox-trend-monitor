@@ -9,6 +9,10 @@ if ! id roblox-monitor >/dev/null 2>&1; then
     useradd --system --home-dir /var/lib/roblox-trend-monitor --shell /usr/sbin/nologin roblox-monitor
 fi
 install -d -o roblox-monitor -g roblox-monitor -m 0750 /var/lib/roblox-trend-monitor
+if [ -f /var/lib/roblox-trend-monitor/market.sqlite ]; then
+    chown roblox-monitor:roblox-monitor /var/lib/roblox-trend-monitor/market.sqlite
+    chmod 0640 /var/lib/roblox-trend-monitor/market.sqlite
+fi
 install -d -o roblox-monitor -g roblox-monitor -m 0750 "$APP/data" "$APP/reports"
 python3 -m venv "$APP/.venv"
 "$APP/.venv/bin/python" -m pip install --disable-pip-version-check -r "$APP/requirements-lock.txt"
