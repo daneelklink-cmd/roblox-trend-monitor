@@ -76,8 +76,12 @@ def generate_research_report(settings=None,output=None,now=None,force=False):
             '- No measured retention, acquisition attribution, competitor revenue, profitability or exhaustive launch coverage is available.']
         attempts,missing=collection_health(settings)
         latest=attempts.iloc[0] if len(attempts) else None
+        finished=attempts[attempts.status.isin(['complete','partial'])] if len(attempts) else attempts
+        summary=finished.iloc[0]['summary'] if len(finished) else {}
+        if isinstance(summary,str):summary=json.loads(summary)
         lines += ['', '## COLLECTION INTEGRITY','',f'Latest attempt: {latest.status if latest is not None else "unknown"}; {latest.started_at if latest is not None else "unknown"} UTC. Last observation: {snapshots.timestamp.max() if len(snapshots) else "none"} UTC.',
             f'Recent explicit missing-observation records (up to 1000): {len(missing)}. API errors and source coverage are retained in collection summaries.']
+        lines.append('Last finished collection summary: '+json.dumps(summary or {},ensure_ascii=False,default=str))
         path=Path(output or ROOT/'reports')/'research'/f'{local:%Y-%m-%d-%H%M%S}.md'
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text('\n'.join(lines)+'\n',encoding='utf-8')

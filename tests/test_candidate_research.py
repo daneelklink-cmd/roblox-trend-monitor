@@ -49,6 +49,16 @@ def test_berlin_calendar_hours_and_dst_ambiguity():
     assert pd.isna(previous_local_hour(pd.Timestamp('2026-10-26 01:30'),1))
 
 
+def test_display_timezone_never_mutates_stored_utc_frames():
+    from app.dashboard.timezone import berlin,local_frame
+    original=pd.DataFrame({'as_of_utc':[pd.Timestamp('2026-10-20 08:00')]})
+    displayed=local_frame(original)
+    assert displayed.as_of_berlin.iloc[0].hour==10
+    assert original.as_of_utc.iloc[0].hour==8 and original.as_of_utc.dt.tz is None
+    assert 'CET' in berlin('2026-01-01 08:00')
+    assert 'CEST' in berlin('2026-07-01 08:00')
+
+
 def test_paired_controls_missing_and_zero_do_not_trigger_replacement(now):
     uid=next(iter(CANDIDATES));records=[]
     for member in [uid,*range(100,120)]:
@@ -99,6 +109,14 @@ def test_playtest_import_evidence_scores_idempotence_and_no_auto_classification(
     with pytest.raises(ValueError):
         with Session.begin() as s:import_playtests(s,content.replace(now.isoformat()+'Z',now.isoformat()),now)
     with Session.begin() as s:assert import_playtests(s,playtest_template(),now)==0
+    offset=(now-timedelta(hours=4)).isoformat()+'-04:00'
+    with Session.begin() as s:assert import_playtests(s,content.replace(now.isoformat()+'Z',offset),now)==0
+    data=list(csv.DictReader(io.StringIO(content)))[0]
+    data.update(development_complexity='3.0',marketing_potential='4.0',source_type='human_playtest')
+    extra=io.StringIO();writer=csv.DictWriter(extra,fieldnames=[*NOTE_COLUMNS,'source_type']);writer.writeheader();writer.writerow(data)
+    with Session.begin() as s:assert import_playtests(s,extra.getvalue(),now)==0
+    with pytest.raises(ValueError):
+        with Session.begin() as s:import_playtests(s,extra.getvalue().replace('human_playtest','ai_generated'),now)
     engine.dispose()
 
 

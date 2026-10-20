@@ -54,6 +54,8 @@ def candidate_metrics(games,snapshots,asof=None):
             target=asof-pd.Timedelta(hours=hours) if hours<24 else previous_local_hour(asof,hours//24)
             prior=hour_row(history,target)
             row[f'baseline_{label}_utc']=target
+            row[f'observed_baseline_{label}_utc']=pd.NaT if prior is None else prior.timestamp
+            row[f'actual_elapsed_{label}_hours']=(current.timestamp-prior.timestamp).total_seconds()/3600 if current is not None and prior is not None else None
             row[f'delta_{label}']=change(current,prior)
             row[f'pct_{label}']=change(current,prior,percent=True)
             row[f'visits_growth_{label}']=change(current,prior,'visits')
@@ -69,7 +71,8 @@ def candidate_metrics(games,snapshots,asof=None):
         row['avg_24h']=float(window.playing.mean()) if enough else None
         row['peak_24h']=int(window.playing.max()) if enough else None
         steps=window.playing.diff(); gaps=window.timestamp.diff().dt.total_seconds()
-        row['sustained_growth_24h']=bool(row['delta_24h']>0 and (steps.iloc[1:]>0).mean()>=.6) if enough and finite(row['delta_24h']) and gaps.iloc[1:].max()<=5400 else None
+        elapsed_delta=change(current,hour_row(history,asof-pd.Timedelta(hours=24)))
+        row['sustained_growth_24h']=bool(elapsed_delta>0 and (steps.iloc[1:]>0).mean()>=.6) if enough and finite(elapsed_delta) and gaps.iloc[1:].max()<=5400 else None
         records.append(row)
     return pd.DataFrame(records)
 
@@ -133,7 +136,10 @@ def compare_controls(snapshots,groups,asof=None):
                 if value is not None: changes.append(value)
                 details.append({'group_id':group['id'],'candidate_id':uid,'control_id':mid,'horizon':label,
                     'as_of_utc':asof,'baseline_utc':baseline,'current_ccu':None if a is None else a.playing,
-                    'baseline_ccu':None if b is None else b.playing,'pct_change':value})
+                    'baseline_ccu':None if b is None else b.playing,'pct_change':value,
+                    'current_observation_utc':pd.NaT if a is None else a.timestamp,
+                    'baseline_observation_utc':pd.NaT if b is None else b.timestamp,
+                    'actual_elapsed_hours':(a.timestamp-b.timestamp).total_seconds()/3600 if a is not None and b is not None else None})
             median=float(pd.Series(changes).median()) if changes else None
             candidate_change=change(current,previous,percent=True)
             adequate=len(changes)>=max(10,math.ceil(.75*len(members)))
@@ -145,4 +151,4 @@ def compare_controls(snapshots,groups,asof=None):
                 'candidate_current_missing':current is None,'candidate_baseline_missing':previous is None,
                 'adequate_control_coverage':adequate,'status':'insufficient_candidate_data' if candidate_change is None else 'insufficient_controls' if not adequate else 'observed_comparison',
                 'comparison_type':'same Berlin wall hour on previous local date' if hours>=24 else 'elapsed-hour comparison'})
-    return pd.DataFrame(rows,columns=['group_id','candidate_id','horizon','as_of_utc','baseline_utc','candidate_delta_ccu','candidate_pct_change','control_median_pct_change','relative_performance_pp','fixed_controls','matched_controls','missing_current_controls','missing_baseline_controls','zero_baseline_controls','candidate_current_missing','candidate_baseline_missing','adequate_control_coverage','status','comparison_type']),pd.DataFrame(details,columns=['group_id','candidate_id','control_id','horizon','as_of_utc','baseline_utc','current_ccu','baseline_ccu','pct_change'])
+    return pd.DataFrame(rows,columns=['group_id','candidate_id','horizon','as_of_utc','baseline_utc','candidate_delta_ccu','candidate_pct_change','control_median_pct_change','relative_performance_pp','fixed_controls','matched_controls','missing_current_controls','missing_baseline_controls','zero_baseline_controls','candidate_current_missing','candidate_baseline_missing','adequate_control_coverage','status','comparison_type']),pd.DataFrame(details,columns=['group_id','candidate_id','control_id','horizon','as_of_utc','baseline_utc','current_ccu','baseline_ccu','pct_change','current_observation_utc','baseline_observation_utc','actual_elapsed_hours'])

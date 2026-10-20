@@ -24,7 +24,7 @@ def research_page(games,snapshots,appearances):
     tracked=set(watch[watch.active].universe_id) if len(watch) else set()
     if not set(CANDIDATES).issubset(tracked):st.warning('One or more research candidates are not pinned in the watchlist; run the authenticated init-research command.')
     display_dataframe(metrics[['name','universe_id','ccu','delta_1h','pct_1h','delta_6h','pct_6h','delta_24h','pct_24h','delta_72h','pct_72h','avg_24h','peak_24h','historical_observed_peak_ccu','drawdown_pct','signal']],hide_index=True,width='stretch')
-    st.caption('24h/72h changes compare the same Berlin wall hour on earlier local dates. 1h/6h use elapsed hours. New observed high and recovery below an earlier peak are distinct; neither proves a breakout. Daily means/peaks require ≥75% hourly coverage and a valid 24h boundary.')
+    st.caption('24h/72h changes compare the same Berlin wall hour on earlier local dates; raw observation times and actual elapsed hours are exported. 1h/6h use elapsed hours. New highs and recoveries are distinct; neither proves a breakout. Mean/peak/sustained flags use elapsed 24h with adequate coverage, separate from calendar-day comparisons.')
     uid=st.selectbox('Inspect research candidate',list(CANDIDATES),format_func=lambda value:CANDIDATES[value])
     with st.expander('Visits, favorites, creation dates and full candidate measurements'):
         display_dataframe(metrics[metrics.universe_id==uid],hide_index=True,width='stretch')

@@ -83,10 +83,12 @@ def import_playtests(session,content,now=None):
     for number,row in enumerate(reader,2):
         if not any(str(row.get(k) or '').strip() for k in NOTE_COLUMNS if k!='universe_id'):continue
         uid=int(row['universe_id'])
+        if row.get('source_type') and row['source_type']!='human_playtest':
+            raise ValueError(f'Row {number}: AI/unverified notes cannot be imported as human playtests')
         if uid not in CANDIDATES or not session.get(Game,uid):raise ValueError(f'Row {number}: unknown research candidate')
         researcher=(row.get('researcher') or '').strip();evidence=(row.get('evidence') or '').strip()
         raw_date=(row.get('observed_at_utc') or '').strip()
-        if not raw_date.endswith('Z') and '+' not in raw_date[10:]:
+        if not raw_date.endswith('Z') and not any(sign in raw_date[10:] for sign in '+-'):
             raise ValueError(f'Row {number}: observed_at_utc needs Z or an explicit timezone offset')
         observed=parse_time(raw_date)
         values={k:(row.get(k) or '').strip() for k in NOTE_FIELDS}
@@ -95,9 +97,9 @@ def import_playtests(session,content,now=None):
             raise ValueError(f'Row {number}: researcher, evidence, at least one observed field and a past observation date are required')
         for key in ('development_complexity','marketing_potential'):
             if values[key]:
-                score=int(values[key])
-                if not 1<=score<=5:raise ValueError(f'Row {number}: {key} must be 1–5')
-                values[key]=score
+                score=float(values[key])
+                if not score.is_integer() or not 1<=score<=5:raise ValueError(f'Row {number}: {key} must be an integer 1–5')
+                values[key]=int(score)
             else:values[key]=None
         canonical={'universe_id':uid,'researcher':researcher,'observed_at':observed.isoformat(),'evidence':evidence,'observations':values}
         identifier=hashlib.sha256(json.dumps(canonical,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
