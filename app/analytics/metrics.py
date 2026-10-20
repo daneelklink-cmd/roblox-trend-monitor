@@ -138,7 +138,9 @@ def game_metrics(game, history, appearances, now):
     row["appearance_count"] = len(appearances)
     row["best_discovery_rank"] = appearances["rank"].min() if not appearances.empty else None
     row["appearance_cycles_24h"] = appearances[appearances.timestamp >= asof - pd.Timedelta(hours=24)].timestamp.nunique() if not appearances.empty else 0
-    recent = history[history.timestamp >= asof - pd.Timedelta(hours=6)]
+    # Scheduled samples differ by milliseconds; include the matching boundary
+    # hour rather than falsely reporting a missing hourly observation.
+    recent = history[history.timestamp.dt.floor("h") >= (asof - pd.Timedelta(hours=6)).floor("h")]
     changes = recent.playing.diff().dropna()
     # Ignore repeated forced/manual observations within minutes as sustained hourly growth.
     gaps = recent.timestamp.diff().dt.total_seconds().iloc[1:]
@@ -148,7 +150,7 @@ def game_metrics(game, history, appearances, now):
     row["observed_peak_ccu"]=peak
     row["drawdown_pct"]=(row["ccu"]/peak-1)*100 if peak>0 else 0.0
     row["hours_since_observed_peak"]=(asof-history.loc[history.playing==peak,"timestamp"].max()).total_seconds()/3600
-    recent24=history[history.timestamp>=asof-pd.Timedelta(hours=24)]
+    recent24=history[history.timestamp.dt.floor("h") >= (asof-pd.Timedelta(hours=24)).floor("h")]
     gaps24=recent24.timestamp.diff().dt.total_seconds().dropna()
     row["coverage_24h"]=min(1.0,recent24.timestamp.dt.floor("h").nunique()/25)
     enough=row["history_hours"]>=24 and row["coverage_24h"]>=0.75 and not gaps24.empty and gaps24.max()<=5400

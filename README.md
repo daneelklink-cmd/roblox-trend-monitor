@@ -208,3 +208,28 @@ The schema supports later imported snapshots with explicit timestamps and a sepa
 The early-discovery extension adds public keyword scouting, young/small-game admission, watchlists, missing-observation records, creation/first-observed cohorts, 30-day comparisons and three research dashboard tabs. See [research definitions and CLI workflows](docs/RESEARCH.md). Default request spacing is 6.5 seconds; search uses at least 60 seconds and one page per query, with four rotating queries per cycle, configurable in `config/discovery.json`. Rate-limit responses remain visible as partial coverage.
 
 Recommended next iteration: collect for 7–14 days, manually classify a focused set of smaller/new games, inspect coverage/data gaps, then validate scores against actual sustained breakouts.
+
+## Full research exports
+
+Open **EXPORTS**, optionally select a UTC observation date range, primary genres and
+creation-age bounds, then **Generate exports**. Defaults include all stored history
+and archived games. Downloads are independent of sidebar ranking filters.
+
+- `Games.csv`: all selected metadata, classifications and per-field provenance.
+- `Snapshots.csv`: individual historical CCU, visits, ratings, favorites and ranks.
+- `Analytics.csv`: latest metrics per selected game at the cutoff, including growth,
+  rank momentum, visit velocity, baseline timestamps, coverage and Breakout Score.
+- The ZIP also contains discovery history, cohort summaries, milestone rates/events,
+  market analyses, a filter manifest and data definitions.
+
+A date-range export selects games observed in that range. Analytics may use earlier
+actual observations as baselines, but never later observations. Game metadata is
+the current stored version, not a reconstructed historical record. Unknown metrics
+remain blank; metadata-only games remain present with blank analytics. Creation age
+is measured at the analysis cutoff. Cohort follow-up and market horizon can be chosen.
+Changing filters requires generating the bundle again. CSV files use UTF-8 with BOM;
+nested metadata/provenance is JSON and Universe ID is the join key.
+
+`python scripts/check_exports.py` verifies real-data CSV/ZIP round trips and saves
+`data/RobloxResearch.zip` for sharing. Export generation is read-only with respect
+to the database and does not trigger collection.

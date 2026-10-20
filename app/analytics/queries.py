@@ -7,13 +7,18 @@ from app.database.session import database, utcnow
 from app.analytics.metrics import game_metrics, threshold_crossings
 
 
-def load_data(settings=None):
+def load_data(settings=None, include_archived=False):
     engine, _ = database(settings)
     try:
         with engine.connect() as connection:
-            games = pd.read_sql(select(Game).where(Game.archived.is_(False)), connection)
-            snapshots = pd.read_sql(select(Snapshot).join(Game).where(Game.archived.is_(False)), connection)
-            appearances = pd.read_sql(select(DiscoveryAppearance).join(Game).where(Game.archived.is_(False)), connection)
+            game_query, snapshot_query, appearance_query = select(Game), select(Snapshot).join(Game), select(DiscoveryAppearance).join(Game)
+            if not include_archived:
+                game_query = game_query.where(Game.archived.is_(False))
+                snapshot_query = snapshot_query.where(Game.archived.is_(False))
+                appearance_query = appearance_query.where(Game.archived.is_(False))
+            games = pd.read_sql(game_query, connection)
+            snapshots = pd.read_sql(snapshot_query, connection)
+            appearances = pd.read_sql(appearance_query, connection)
             runs = pd.read_sql(select(CollectionRun).order_by(CollectionRun.started_at.desc()).limit(24), connection)
         for frame, columns in ((games, ["created_at", "updated_at", "first_seen_at", "last_seen_at"]),
                                (snapshots, ["timestamp", "game_updated_at"]), (appearances, ["timestamp"])):

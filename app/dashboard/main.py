@@ -8,6 +8,7 @@ import streamlit as st
 from app.analytics.queries import load_data, build_market, entrants, comparison_market
 from app.database.session import utcnow
 from app.dashboard.research import cohort_page,opportunities_page,coverage_page
+from app.dashboard.exports import export_page
 
 st.set_page_config(page_title="Roblox / Market Intelligence", page_icon="↗", layout="wide")
 st.markdown("""<style>
@@ -142,7 +143,7 @@ def main():
         filtered = filtered[filtered.source.map(lambda s: bool(set(s.split(",")) & set(sources)))]
     if not include_stale:
         filtered = filtered[~filtered.stale]
-    tabs = st.tabs(["BREAKOUTS", "TOP PLAYING", "NEW ENTRANTS", "SUSTAINED WINNERS", "DECLINING", "GAME EXPLORER", "MARKET OVERVIEW", "COHORTS", "MARKET OPPORTUNITIES", "DISCOVERY & CLASSIFICATION"])
+    tabs = st.tabs(["BREAKOUTS", "TOP PLAYING", "NEW ENTRANTS", "SUSTAINED WINNERS", "DECLINING", "GAME EXPLORER", "MARKET OVERVIEW", "COHORTS", "MARKET OPPORTUNITIES", "DISCOVERY & CLASSIFICATION", "EXPORTS"])
     with tabs[0]:
         st.subheader("What is accelerating right now?")
         scored = filtered[filtered.breakout_score.notna()].sort_values("breakout_score", ascending=False)
@@ -217,6 +218,7 @@ def main():
     with tabs[7]: cohort_page(games,snapshots,market)
     with tabs[8]: opportunities_page(games,market)
     with tabs[9]: coverage_page(games)
+    with tabs[10]: export_page()
 
 
 main()

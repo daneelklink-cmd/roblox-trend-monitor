@@ -168,3 +168,17 @@ def test_mature_cohort_and_30day_baseline(settings,now):
     rate=rates[(rates.cohort.str.startswith('First observed'))&(rates.threshold==500)].iloc[0]
     assert rate.eligible_nonbaseline_games==1 and rate.crossed_by_followup==1
     assert rate.observed_crossing_share_by_followup_pct==100
+
+
+def test_hourly_coverage_tolerates_scheduler_milliseconds(settings,now):
+    run(settings,now)
+    engine,Session=database(settings)
+    with Session.begin() as s:
+        for hour in range(1,7):
+            stamp=now+timedelta(hours=hour,milliseconds=hour)
+            s.add(Snapshot(cycle_key=stamp.isoformat(),timestamp=stamp,universe_id=1,playing=100+hour,
+                game_name_at_time='Scheduler jitter fixture'))
+    engine.dispose()
+    games,snapshots,appearances,_=load_data(settings)
+    market=build_market(games,snapshots,appearances,now+timedelta(hours=6,seconds=1))
+    assert market.iloc[0].coverage_6h==1
