@@ -8,16 +8,17 @@ from app.database.session import database
 from app.database.models import Game
 from sqlalchemy import select
 from app.services.exports import build_exports
+from app.dashboard.timezone import berlin
 
 
 def export_page():
     st.subheader('Research data exports')
-    st.caption('Full stored data, independent of sidebar ranking filters. All timestamps and date boundaries use UTC.')
+    st.caption('Full stored data, independent of sidebar ranking filters. Choose dates in Europe/Berlin; exported timestamps remain UTC.')
     with st.form('research_export_form'):
         include_archived = st.checkbox('Include archived games',value=True)
         use_period = st.checkbox('Limit observation period',value=False)
-        today = utcnow().date()
-        period = st.date_input('Observation date range (UTC; used only when enabled)',
+        today = pd.Timestamp(utcnow()).tz_localize('UTC').tz_convert('Europe/Berlin').date()
+        period = st.date_input('Observation date range (Europe/Berlin; used only when enabled)',
             value=(today-timedelta(days=30),today),max_value=today)
         # Metadata lookup is cheap compared with generating all analytics/ZIPs.
         games = export_metadata()
@@ -36,15 +37,15 @@ def export_page():
             st.error('Maximum age must be at least minimum age.');return
         with st.spinner('Preparing filtered research data…'):
             games,snapshots,appearances,_ = load_data(include_archived=include_archived)
-            start = datetime.combine(period[0],time.min) if use_period else None
-            end = datetime.combine(period[1]+timedelta(days=1),time.min)-timedelta(microseconds=1) if use_period else None
+            start = pd.Timestamp(datetime.combine(period[0],time.min)).tz_localize('Europe/Berlin').tz_convert('UTC').tz_localize(None) if use_period else None
+            end = pd.Timestamp(datetime.combine(period[1]+timedelta(days=1),time.min)).tz_localize('Europe/Berlin').tz_convert('UTC').tz_localize(None)-timedelta(microseconds=1) if use_period else None
             files,bundle,manifest = build_exports(games,snapshots,appearances,start=start,end=end,
                 genres=genres,min_age=minimum,max_age=maximum,followup_hours=followup,horizon=horizon,include_archived=include_archived)
             st.session_state['research_export'] = (files,bundle,manifest)
     saved = st.session_state.get('research_export')
     if saved:
         files,bundle,manifest = saved
-        st.caption(f"Generated {manifest['generated_at_utc']} · cutoff {manifest['analysis_as_of_utc']}. These downloads retain the filters from that generation.")
+        st.caption(f"Generated {berlin(manifest['generated_at_utc'])} · cutoff {berlin(manifest['analysis_as_of_utc'])}. These downloads retain the filters from that generation.")
         st.json(manifest,expanded=False)
         for name in ('Games.csv','Snapshots.csv','Analytics.csv'):
             st.download_button(f"Download {name} · {manifest['rows'][name]:,} rows",files[name],file_name=name,mime='text/csv',on_click='ignore')

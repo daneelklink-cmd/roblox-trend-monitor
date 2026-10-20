@@ -95,6 +95,8 @@ def generate_reports(settings=None, output=None):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         paths.append(path)
+    from app.reports.research import generate_research_report
+    generate_research_report(settings,output)
     return paths
 
 

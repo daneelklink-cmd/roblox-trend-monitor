@@ -7,7 +7,7 @@ from app.config import ROOT
 
 app = AppTest.from_file(str(ROOT / "app/dashboard/main.py"), default_timeout=60).run()
 assert not app.exception, [x.message for x in app.exception]
-assert len(app.tabs) == 11
+assert len(app.tabs) == 12
 app.text_input[0].set_value("Brookhaven").run()
 assert not app.exception, [x.message for x in app.exception]
 app.text_input[0].set_value("").run()
@@ -26,4 +26,9 @@ next(x for x in app.number_input if x.label == 'Export maximum creation age / da
 next(x for x in app.button if x.label == 'Generate exports').click().run()
 assert not app.exception, [x.message for x in app.exception]
 assert app.session_state['research_export'][2]['filters']['maximum_creation_age_days'] == 30
-print("Dashboard AppTest passed: eleven tabs, export generation, date/age filters, cohorts, opportunities and explorer.")
+next(x for x in app.selectbox if x.label == 'Inspect research candidate').select(10770251720).run()
+assert not app.exception, [x.message for x in app.exception]
+next(x for x in app.button if x.label == 'Generate research ZIP').click().run()
+assert not app.exception, [x.message for x in app.exception]
+assert len(app.session_state['candidate_research_zip'])>100
+print("Dashboard AppTest passed: twelve tabs, research candidates/ZIP, export filters, cohorts and explorer.")

@@ -27,11 +27,20 @@ def main():
     launch.add_argument("universe_id",type=int)
     launch.add_argument("date",help="Verified UTC timestamp, not API creation time")
     launch.add_argument("--evidence-url",required=True)
+    research=sub.add_parser('init-research')
+    research.add_argument('--new-control-version',action='store_true',help='Explicitly create a new frozen group version; never automatic')
+    sub.add_parser('import-playtests').add_argument('file')
     args=parser.parse_args()
     engine,Session=database()
     try:
         with Session.begin() as session:
-            if args.command=="watch":
+            if args.command=='init-research':
+                from app.services.research import initialize_research
+                print(initialize_research(new_version=args.new_control_version))
+            elif args.command=='import-playtests':
+                from app.services.research import import_playtests
+                print('New playtest observations:',import_playtests(session,Path(args.file).read_text(encoding='utf-8-sig')))
+            elif args.command=="watch":
                 if args.action=="list":
                     for row in session.scalars(select(WatchEntry)):
                         print(row.universe_id,row.active,row.note)

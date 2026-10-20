@@ -211,7 +211,7 @@ Recommended next iteration: collect for 7–14 days, manually classify a focused
 
 ## Full research exports
 
-Open **EXPORTS**, optionally select a UTC observation date range, primary genres and
+Open **EXPORTS**, optionally select a Europe/Berlin observation date range, primary genres and
 creation-age bounds, then **Generate exports**. Defaults include all stored history
 and archived games. Downloads are independent of sidebar ranking filters.
 
@@ -233,3 +233,67 @@ nested metadata/provenance is JSON and Universe ID is the join key.
 `python scripts/check_exports.py` verifies real-data CSV/ZIP round trips and saves
 `data/RobloxResearch.zip` for sharing. Export generation is read-only with respect
 to the database and does not trigger collection.
+
+## Focused candidate research
+
+**RESEARCH CANDIDATES** adds a single view for Solve The Cube, Get A Grip, Waddle
+Obby, SUNYI and ScootX. All five and their frozen controls are pinned through the
+existing watchlist. `python -m app.manage init-research` is idempotent; it neither
+duplicates game rows nor changes existing control membership. Explicitly supplying
+`--new-control-version` creates a new version and retains the old manifest.
+
+Each group targets 20 controls, excluding all five research candidates. Selection
+uses fresh positive CCU and official Roblox genre metadata, then progressively
+relaxes age/size matching: same genre, size ratio 0.2–5 and age gap <=90d; same genre,
+size ratio 0.1–10 and age gap <=365d; other genre with the original tighter size/age
+bounds. Groups are ranked by log size distance and age distance; exact formula,
+selection-time CCU/age/genre and fallback tier are stored in the frozen manifest.
+Fewer controls are retained if the criteria cannot supply 20. Missing members are
+never replaced. Old group members remain tracked when a version is changed.
+
+Research comparisons use exact occupied UTC hourly bins; no nearest-hour carry
+forward. Daily/3-day comparisons match the same Berlin wall hour on previous local
+dates. DST-ambiguous/nonexistent baselines remain unknown. Relative performance is
+candidate percentage change minus the control median, in percentage points, with
+at least 10 paired controls and >=75% fixed-group coverage. Zero baselines have
+undefined percentage change. Missing-current, missing-baseline and zero-baseline
+counts remain explicit. These are observational controls selected after the signal,
+not randomization or causal estimates; pre-selection comparisons are retrospective.
+
+Dashboard timestamps display Europe/Berlin. Persistence and CSV timestamps remain
+UTC. Cohort week membership remains defined in UTC. A new observed high is distinct
+from recovery below a previous peak; neither automatically implies a breakout.
+Daily average/peak and sustained-growth flags require sufficient real history.
+
+Download the playtest CSV template from the research view. Enter only observations
+from actual play, with researcher, evidence and a timestamp including Z or an offset.
+Unknown mechanics stay blank. At least one observation field is required; subjective
+development-complexity and marketing-potential scores, when present, must be 1–5.
+Import through the existing authenticated shell workflow:
+
+```bash
+cd /opt/roblox-trend-monitor
+set -a; . /etc/roblox-trend-monitor.env; set +a
+.venv/bin/python -m app.manage import-playtests /path/to/PlaytestTemplate.csv
+```
+
+Notes are append-only, identical imports are skipped, invalid imports roll back, and
+notes do not automatically overwrite classifications. Human playtest evidence is
+stored separately from quantitative observations and automated/manual classification
+labels. Public dashboard readers cannot edit notes or control groups.
+
+The existing hourly report pipeline checks whether the 72-hour research briefing is
+due every 24h (up to one collection interval of update latency). Reports contain
+OBSERVED FACTS, VERIFIED GAMEPLAY INFORMATION, HYPOTHESES and INSUFFICIENT DATA.
+They never invent missing history, retention, revenue or profit. Research reports
+can be read/downloaded in the research view. An idle service restart skips redundant
+same-hour collection only if the current cycle completed and all watchlist members
+already have a snapshot; the normal hourly trigger is unchanged.
+
+**Generate research ZIP** exports candidates plus all frozen/versioned control members,
+metadata, all available snapshots, general analytics, exact-hour candidate metrics,
+paired control endpoints, group manifests, playtest notes/template, watchlist and
+explicit missing observations. Universe ID and group ID are join keys. General
+Analytics retains elapsed-time baselines; ResearchCandidates/ControlComparisons
+contain the Berlin matched-hour definitions. Export documentation records this
+distinction. Generate again to refresh the bundle; export does not collect data.

@@ -6,5 +6,6 @@ data/*
 reports/daily/
 reports/3day/
 reports/weekly/
+reports/research/
 .env
 *.log

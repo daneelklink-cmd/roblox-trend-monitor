@@ -9,6 +9,8 @@ from app.analytics.queries import load_data, build_market, entrants, comparison_
 from app.database.session import utcnow
 from app.dashboard.research import cohort_page,opportunities_page,coverage_page
 from app.dashboard.exports import export_page
+from app.dashboard.candidates import research_page
+from app.dashboard.timezone import berlin,local_frame,display_dataframe
 
 st.set_page_config(page_title="Roblox / Market Intelligence", page_icon="↗", layout="wide")
 st.markdown("""<style>
@@ -44,7 +46,7 @@ def table(frame, columns=None, key=None, select=False):
     options = {"hide_index": True, "width": "stretch", "key": key}
     if select:
         options.update(on_select="rerun", selection_mode="single-row")
-    return st.dataframe(shown, **options)
+    return display_dataframe(shown, **options)
 
 
 def explorer(games, snapshots, appearances, market):
@@ -66,24 +68,24 @@ def explorer(games, snapshots, appearances, market):
     c[3].metric("Snapshots", len(history))
     if row.stale:
         st.warning("Latest observation is more than two hours old; excluded from breakout rankings.")
-    st.caption(f"First seen: {game.first_seen_at} UTC | Created: {game.created_at} | Updated: {game.updated_at} | Latest snapshot: {row.as_of} UTC")
+    st.caption(f"First seen: {berlin(game.first_seen_at)} | Created: {berlin(game.created_at)} | Updated: {berlin(game.updated_at)} | Latest snapshot: {berlin(row.as_of)}")
     if pd.notna(game.place_id):
         st.link_button("Open Roblox experience", f"https://www.roblox.com/games/{int(game.place_id)}")
-    st.plotly_chart(px.line(history, x="timestamp", y="playing", title="Concurrent players · observed UTC", markers=len(history) < 5), width="stretch")
+    st.plotly_chart(px.line(local_frame(history), x="timestamp", y="playing", title="Concurrent players · Europe/Berlin", markers=len(history) < 5), width="stretch")
     if not ranks.empty:
-        fig = px.line(ranks, x="timestamp", y="rank", color="source", title="Discovery rank history · each list tracked separately", markers=True)
+        fig = px.line(local_frame(ranks), x="timestamp", y="rank", color="source", title="Discovery rank history · each list tracked separately", markers=True)
         fig.update_yaxes(autorange="reversed")
         st.plotly_chart(fig, width="stretch")
     left, right = st.columns(2)
     with left:
-        st.plotly_chart(px.line(history, x="timestamp", y="visits", title="Cumulative visits", markers=len(history) < 5), width="stretch")
+        st.plotly_chart(px.line(local_frame(history), x="timestamp", y="visits", title="Cumulative visits", markers=len(history) < 5), width="stretch")
     with right:
-        st.plotly_chart(px.line(history, x="timestamp", y="favorites", title="Favorites", markers=len(history) < 5), width="stretch")
+        st.plotly_chart(px.line(local_frame(history), x="timestamp", y="favorites", title="Favorites", markers=len(history) < 5), width="stretch")
     st.subheader("Growth and observation quality")
     table(market[market.universe_id == uid], ["name", "pct_1h", "pct_6h", "pct_24h", "pct_72h", "pct_7d", "pct_30d", "visit_velocity_1h", "visit_velocity_24h", "drawdown_pct", "sustained_growth_24h", "coverage_24h", "avg_24h", "avg_72h", "avg_7d", "avg_30d", "peak_24h", "peak_7d", "rank_change_1h", "rank_change_24h", "best_discovery_rank", "appearance_count", "update_age_days"], key="detail_metrics")
     title_changes = history.loc[history.game_name_at_time.ne(history.game_name_at_time.shift()), ["timestamp", "game_name_at_time"]]
     st.subheader("Observed title history")
-    st.dataframe(title_changes, hide_index=True, width="stretch")
+    display_dataframe(title_changes, hide_index=True, width="stretch")
     with st.expander("Metadata / classification foundation"):
         st.write(game.description or "No description exposed.")
         st.json({k: None if pd.isna(game[k]) else game[k] for k in ["primary_genre", "secondary_genre", "core_loop", "theme", "trend_family", "social_mechanic", "monetization_style"]})
@@ -93,7 +95,7 @@ def explorer(games, snapshots, appearances, market):
 
 def main():
     st.title("ROBLOX / MARKET INTELLIGENCE")
-    st.caption("ACCELERATION FIRST · PUBLIC OBSERVATIONS · LOCAL SQLITE · ALL TIMES UTC")
+    st.caption("ACCELERATION FIRST · PUBLIC OBSERVATIONS · DISPLAY EUROPE/BERLIN · STORAGE/CSV UTC")
     if st.sidebar.button("Refresh observations"):
         st.cache_data.clear()
         st.rerun()
@@ -101,10 +103,10 @@ def main():
     if market.empty:
         st.info("No observations yet. Run `python -m app.collect` from the project folder, then refresh.")
         if not runs.empty:
-            st.dataframe(runs, width="stretch")
+            display_dataframe(runs, width="stretch")
         return
     latest = pd.Timestamp(snapshots.timestamp.max())
-    st.caption(f"Latest collection: {latest} UTC · {len(games):,} tracked games · cache TTL 60s · use Refresh observations")
+    st.caption(f"Latest collection: {berlin(latest)} · {len(games):,} tracked games · cache TTL 60s · use Refresh observations")
     if utcnow() - latest.to_pydatetime() > pd.Timedelta(hours=2):
         st.warning("Collection is stale. Start `python -m app.scheduler` to collect hourly while the process runs.")
     if not runs.empty and runs.iloc[0].status != "complete":
@@ -143,7 +145,7 @@ def main():
         filtered = filtered[filtered.source.map(lambda s: bool(set(s.split(",")) & set(sources)))]
     if not include_stale:
         filtered = filtered[~filtered.stale]
-    tabs = st.tabs(["BREAKOUTS", "TOP PLAYING", "NEW ENTRANTS", "SUSTAINED WINNERS", "DECLINING", "GAME EXPLORER", "MARKET OVERVIEW", "COHORTS", "MARKET OPPORTUNITIES", "DISCOVERY & CLASSIFICATION", "EXPORTS"])
+    tabs = st.tabs(["BREAKOUTS", "TOP PLAYING", "NEW ENTRANTS", "SUSTAINED WINNERS", "DECLINING", "GAME EXPLORER", "MARKET OVERVIEW", "COHORTS", "MARKET OPPORTUNITIES", "DISCOVERY & CLASSIFICATION", "EXPORTS", "RESEARCH CANDIDATES"])
     with tabs[0]:
         st.subheader("What is accelerating right now?")
         scored = filtered[filtered.breakout_score.notna()].sort_values("breakout_score", ascending=False)
@@ -166,10 +168,10 @@ def main():
         period = st.selectbox("Recent crossing window", [24, 72, 168], format_func=lambda h: f"Last {h} hours")
         events = events[(events.timestamp >= pd.Timestamp(utcnow()) - pd.Timedelta(hours=period)) & events.universe_id.isin(filtered.universe_id)]
         observed = events[events.kind == "observed upward crossing"]
-        st.dataframe(observed.sort_values("timestamp", ascending=False), hide_index=True, width="stretch")
+        display_dataframe(observed.sort_values("timestamp", ascending=False), hide_index=True, width="stretch")
         st.caption("First observation already above a threshold is not proof of a new crossing. Crossing times are observation times, not precise real-world event times.")
         with st.expander("Already above threshold when tracking began"):
-            st.dataframe(events[events.kind != "observed upward crossing"], hide_index=True, width="stretch")
+            display_dataframe(events[events.kind != "observed upward crossing"], hide_index=True, width="stretch")
     with tabs[3]:
         st.subheader("Positive growth across 24h, 3d and 7d")
         winners = filtered[(filtered.pct_24h > 0) & (filtered.pct_72h > 0) & (filtered.pct_7d > 0)]
@@ -213,12 +215,13 @@ def main():
             st.markdown("**Fastest-growing new experiences · age ≤30 days**")
             table(matched[(matched.age_days <= 30) & (matched[f"pct_{label}"] > 0)].nlargest(10, f"pct_{label}"), key="new_fastest")
         with st.expander("Collection health / recent runs"):
-            st.dataframe(runs, hide_index=True, width="stretch")
+            display_dataframe(runs, hide_index=True, width="stretch")
         st.caption("Discovery lists are a sampled, potentially regional/device-specific view. No whole-platform market-share claims or inferred genre trends.")
     with tabs[7]: cohort_page(games,snapshots,market)
     with tabs[8]: opportunities_page(games,market)
     with tabs[9]: coverage_page(games)
     with tabs[10]: export_page()
+    with tabs[11]: research_page(games,snapshots,appearances)
 
 
 main()

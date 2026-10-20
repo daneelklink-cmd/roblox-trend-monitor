@@ -140,3 +140,34 @@ class ClassificationHistory(Base):
     source: Mapped[str] = mapped_column(String)
     confidence: Mapped[float] = mapped_column(Float)
     evidence: Mapped[str | None] = mapped_column(Text)
+
+
+class ResearchControlGroup(Base):
+    __tablename__ = "research_control_groups"
+    __table_args__ = (UniqueConstraint("candidate_id", "version"),)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("games.universe_id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    selected_at: Mapped[datetime] = mapped_column(DateTime)
+    selection_as_of: Mapped[datetime] = mapped_column(DateTime)
+    methodology: Mapped[dict] = mapped_column(JSON)
+    members: Mapped[list] = mapped_column(JSON)
+
+
+class PlaytestNote(Base):
+    __tablename__ = "playtest_notes"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    universe_id: Mapped[int] = mapped_column(ForeignKey("games.universe_id"), index=True)
+    researcher: Mapped[str] = mapped_column(Text)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    entered_at: Mapped[datetime] = mapped_column(DateTime)
+    source_type: Mapped[str] = mapped_column(String)
+    evidence: Mapped[str] = mapped_column(Text)
+    observations: Mapped[dict] = mapped_column(JSON)
+
+
+class ResearchReportRun(Base):
+    __tablename__ = "research_report_runs"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    path: Mapped[str] = mapped_column(Text)
